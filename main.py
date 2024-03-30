@@ -79,7 +79,7 @@ class App(QWidget):
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(100, 100, self.width, self.height)
-        self.setWindowIcon(QIcon('assets\icon.png'))  # Replace 'icon.png' with the path to your icon file
+        self.setWindowIcon(QIcon('assets\icon.png'))
 
         self.selectFolderBtn = QPushButton('Select Source Folder', self)
         self.selectFolderBtn.setGeometry(50, 50, 300, 30)
