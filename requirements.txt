@@ -15,7 +15,6 @@ idna==3.6
 packaging==24.0
 pefile==2023.2.7
 pillow==10.2.0
-py2exe==0.13.0.1
 pycparser==2.22
 pyinstaller==6.5.0
 pyinstaller-hooks-contrib==2024.3
@@ -25,7 +24,6 @@ PyQt5-Qt5==5.15.2
 PyQt5-sip==12.13.0
 pywin32-ctypes==0.2.2
 requests==2.31.0
-ttkthemes==3.2.2
 urllib3==2.2.1
 watchdog==4.0.0
 whichcraft==0.6.1
