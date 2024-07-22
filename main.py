@@ -1,24 +1,19 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog
-from PyQt5.QtCore import QTimer
-from os import scandir, rename, makedirs
-from os.path import splitext, exists, join
-from shutil import move
-
-import logging
-
+import time
+from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog
+from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QThread, pyqtSignal
+from os import scandir, makedirs, remove
+from os.path import splitext, exists, join, isfile, isdir
+from shutil import move, rmtree
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from PyQt5.QtGui import QIcon
 
 # Define supported file extensions
-image_extensions = [".jpg", ".jpeg", ".jpe", ".jif", ".jfif", ".jfi", ".png", ".gif", ".webp", ".tiff", ".tif", ".psd", ".raw", ".arw", ".cr2", ".nrw",
-                    ".k25", ".bmp", ".dib", ".heif", ".heic", ".ind", ".indd", ".indt", ".jp2", ".j2k", ".jpf", ".jpf", ".jpx", ".jpm", ".mj2", ".svg", ".svgz", ".ai", ".eps", ".ico"]
-video_extensions = [".webm", ".mpg", ".mp2", ".mpeg", ".mpe", ".mpv", ".ogg",
-                    ".mp4", ".mp4v", ".m4v", ".avi", ".wmv", ".mov", ".qt", ".flv", ".swf", ".avchd"]
+image_extensions = [".jpg", ".jpeg", ".jpe", ".jif", ".jfif", ".jfi", ".png", ".gif", ".webp", ".tiff", ".tif", ".psd", ".raw", ".arw", ".cr2", ".nrw", ".k25", ".bmp", ".dib", ".heif", ".heic", ".ind", ".indd", ".indt", ".jp2", ".j2k", ".jpf", ".jpf", ".jpx", ".jpm", ".mj2", ".svg", ".svgz", ".ai", ".eps", ".ico"]
+video_extensions = [".webm", ".mpg", ".mp2", ".mpeg", ".mpe", ".mpv", ".ogg", ".mp4", ".mp4v", ".m4v", ".avi", ".wmv", ".mov", ".qt", ".flv", ".swf", ".avchd"]
 audio_extensions = [".m4a", ".flac", ".mp3", ".wav", ".wma", ".aac"]
-document_extensions = [".doc", ".docx", ".odt", ".txt",
-                       ".pdf", ".xls", ".xlsx", ".ppt", ".pptx", ".csv"]
+document_extensions = [".doc", ".docx", ".odt", ".txt", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx", ".csv"]
 design_extensions = [".psd", ".ai", ".indd", ".indt"]
 archive_extensions = [".zip", ".rar", ".7z", ".tar", ".gz"]
 script_extensions = [".py", ".java", ".cpp", ".c", ".cs", ".js", ".html", ".css", ".php", ".rb", ".r", ".go", ".sh", ".pl", ".swift", ".kt", ".ts", ".lua"]
@@ -26,18 +21,21 @@ script_extensions = [".py", ".java", ".cpp", ".c", ".cs", ".js", ".html", ".css"
 # Define source directory
 source_dir = ""
 
+
 class MoverHandler(FileSystemEventHandler):
     def on_modified(self, event):
-        with scandir(source_dir) as entries:
-            for entry in entries:
-                name = entry.name
-                self.check_audio_files(entry, name)
-                self.check_video_files(entry, name)
-                self.check_image_files(entry, name)
-                self.check_document_files(entry, name)
-                self.check_design_files(entry, name)
-                self.check_archive_files(entry, name)
-                self.check_script_files(entry, name)
+        if not event.is_directory:
+            time.sleep(1)  # Small delay to handle race condition
+            with scandir(source_dir) as entries:
+                for entry in entries:
+                    name = entry.name
+                    self.check_audio_files(entry, name)
+                    self.check_video_files(entry, name)
+                    self.check_image_files(entry, name)
+                    self.check_document_files(entry, name)
+                    self.check_design_files(entry, name)
+                    self.check_archive_files(entry, name)
+                    self.check_script_files(entry, name)
 
     def check_audio_files(self, entry, name):
         if any(name.lower().endswith(ext) for ext in audio_extensions):
@@ -85,6 +83,25 @@ class MoverHandler(FileSystemEventHandler):
             move_file(entry, dest_dir, name)
 
 
+class MonitorThread(QThread):
+    folder_selected = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self.observer = None
+
+    def run(self):
+        event_handler = MoverHandler()
+        self.observer = Observer()
+        self.observer.schedule(event_handler, source_dir, recursive=True)
+        self.observer.start()
+        self.exec()
+
+    def stop(self):
+        self.observer.stop()
+        self.observer.join()
+
+
 class App(QWidget):
     def __init__(self):
         super().__init__()
@@ -92,11 +109,12 @@ class App(QWidget):
         self.width = 400
         self.height = 200
         self.initUI()
+        self.monitor_thread = MonitorThread()
 
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(100, 100, self.width, self.height)
-        self.setWindowIcon(QIcon('assets/icon.png'))
+        self.setWindowIcon(QIcon(r'C:\Users\PMLS\Desktop\FileSorter\assets\icon.png'))
 
         self.selectFolderBtn = QPushButton('Select Source Folder', self)
         self.selectFolderBtn.setGeometry(50, 50, 300, 30)
@@ -112,8 +130,7 @@ class App(QWidget):
         self.show()
 
     def selectFolder(self):
-        folder = QFileDialog.getExistingDirectory(
-            self, 'Select Source Folder', '/home')
+        folder = QFileDialog.getExistingDirectory(self, 'Select Source Folder', '/home')
         if folder:
             global source_dir
             source_dir = folder
@@ -124,18 +141,31 @@ class App(QWidget):
             for dest_dir in dest_dirs:
                 dest_path = join(source_dir, dest_dir)
                 if not exists(dest_path):
-                    makedirs(dest_path)
+                    makedirs(dest_path, exist_ok=True)
+                elif isfile(dest_path):
+                    remove(dest_path)
+                    makedirs(dest_path, exist_ok=True)
 
             # Create subfolders within Documents folder
             document_subfolders = ["PDF", "CSV", "Text", "PPT", "Word"]
             documents_dir = join(source_dir, "Documents")
+            if not exists(documents_dir):
+                makedirs(documents_dir, exist_ok=True)
+            elif isfile(documents_dir):
+                remove(documents_dir)
+                makedirs(documents_dir, exist_ok=True)
             for subfolder in document_subfolders:
                 subfolder_path = join(documents_dir, subfolder)
                 if not exists(subfolder_path):
-                    makedirs(subfolder_path)
+                    makedirs(subfolder_path, exist_ok=True)
+                elif isfile(subfolder_path):
+                    remove(subfolder_path)
+                    makedirs(subfolder_path, exist_ok=True)
 
     def monitorFolder(self):
         if source_dir:
+            if not self.monitor_thread.isRunning():
+                self.monitor_thread.start()
             with scandir(source_dir) as entries:
                 for entry in entries:
                     name = entry.name
@@ -157,10 +187,15 @@ def move_file(entry, dest_dir, name):
             counter += 1
         dest_file_path = join(dest_dir, f"{filename}({counter}){extension}")
 
-    move(entry, dest_file_path)
+    try:
+        move(entry, dest_file_path)
+    except FileNotFoundError:
+        print(f"File not found: {entry}")
+    except Exception as e:
+        print(f"Error moving file {entry} to {dest_file_path}: {e}")
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = App()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
