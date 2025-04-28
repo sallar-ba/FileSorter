@@ -9,79 +9,59 @@ from shutil import move, rmtree
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Define supported file extensions
-image_extensions = [".jpg", ".jpeg", ".jpe", ".jif", ".jfif", ".jfi", ".png", ".gif", ".webp", ".tiff", ".tif", ".psd", ".raw", ".arw", ".cr2", ".nrw", ".k25", ".bmp", ".dib", ".heif", ".heic", ".ind", ".indd", ".indt", ".jp2", ".j2k", ".jpf", ".jpf", ".jpx", ".jpm", ".mj2", ".svg", ".svgz", ".ai", ".eps", ".ico"]
-video_extensions = [".webm", ".mpg", ".mp2", ".mpeg", ".mpe", ".mpv", ".ogg", ".mp4", ".mp4v", ".m4v", ".avi", ".wmv", ".mov", ".qt", ".flv", ".swf", ".avchd"]
-audio_extensions = [".m4a", ".flac", ".mp3", ".wav", ".wma", ".aac"]
-document_extensions = [".doc", ".docx", ".odt", ".txt", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx", ".csv"]
-design_extensions = [".psd", ".ai", ".indd", ".indt"]
-archive_extensions = [".zip", ".rar", ".7z", ".tar", ".gz"]
-script_extensions = [".py", ".java", ".cpp", ".c", ".cs", ".js", ".html", ".css", ".php", ".rb", ".r", ".go", ".sh", ".pl", ".swift", ".kt", ".ts", ".lua"]
+image_extensions = {".jpg", ".jpeg", ".jpe", ".jif", ".jfif", ".jfi", ".png", ".gif", ".webp", ".tiff", ".tif", ".psd", ".raw", ".arw", ".cr2", ".nrw", ".k25", ".bmp", ".dib", ".heif", ".heic", ".ind", ".indd", ".indt", ".jp2", ".j2k", ".jpf", ".jpf", ".jpx", ".jpm", ".mj2", ".svg", ".svgz", ".ai", ".eps", ".ico"}
+video_extensions = {".webm", ".mpg", ".mp2", ".mpeg", ".mpe", ".mpv", ".ogg", ".mp4", ".mp4v", ".m4v", ".avi", ".wmv", ".mov", ".qt", ".flv", ".swf", ".avchd"}
+audio_extensions = {".m4a", ".flac", ".mp3", ".wav", ".wma", ".aac"}
+document_extensions = {".doc", ".docx", ".odt", ".txt", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx", ".csv"}
+design_extensions = {".psd", ".ai", ".indd", ".indt"}
+archive_extensions = {".zip", ".rar", ".7z", ".tar", ".gz"}
+script_extensions = {".py", ".java", ".cpp", ".c", ".cs", ".js", ".html", ".css", ".php", ".rb", ".r", ".go", ".sh", ".pl", ".swift", ".kt", ".ts", ".lua"}
 
-# Define source directory
 source_dir = ""
-
 
 class MoverHandler(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.is_directory:
-            time.sleep(1)  # Small delay to handle race condition
+            time.sleep(1)
             with scandir(source_dir) as entries:
                 for entry in entries:
-                    name = entry.name
-                    self.check_audio_files(entry, name)
-                    self.check_video_files(entry, name)
-                    self.check_image_files(entry, name)
-                    self.check_document_files(entry, name)
-                    self.check_design_files(entry, name)
-                    self.check_archive_files(entry, name)
-                    self.check_script_files(entry, name)
+                    self.process_file(entry)
 
-    def check_audio_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in audio_extensions):
-            dest_dir = join(source_dir, "Music")
-            move_file(entry, dest_dir, name)
+    def process_file(self, entry):
+        name = entry.name.lower()
+        ext = splitext(name)[1]
+        
+        if ext in audio_extensions:
+            self.move_to_category(entry, "Music")
+        elif ext in video_extensions:
+            self.move_to_category(entry, "Video")
+        elif ext in image_extensions:
+            self.move_to_category(entry, "Image")
+        elif ext in document_extensions:
+            self.handle_document(entry, ext)
+        elif ext in design_extensions:
+            self.move_to_category(entry, "Design")
+        elif ext in archive_extensions:
+            self.move_to_category(entry, "Archives")
+        elif ext in script_extensions:
+            self.move_to_category(entry, "Scripts")
 
-    def check_video_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in video_extensions):
-            dest_dir = join(source_dir, "Video")
-            move_file(entry, dest_dir, name)
+    def handle_document(self, entry, ext):
+        base_dir = join(source_dir, "Documents")
+        if ext == ".pdf":
+            self.move_to_category(entry, join("Documents", "PDF"))
+        elif ext in {".csv", ".xls", ".xlsx"}:
+            self.move_to_category(entry, join("Documents", "CSV"))
+        elif ext == ".txt":
+            self.move_to_category(entry, join("Documents", "Text"))
+        elif ext in {".doc", ".docx", ".odt"}:
+            self.move_to_category(entry, join("Documents", "Word"))
+        elif ext in {".ppt", ".pptx"}:
+            self.move_to_category(entry, join("Documents", "PPT"))
 
-    def check_image_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in image_extensions):
-            dest_dir = join(source_dir, "Image")
-            move_file(entry, dest_dir, name)
-
-    def check_document_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in document_extensions):
-            dest_dir = join(source_dir, "Documents")
-            if name.lower().endswith(".pdf"):
-                dest_dir = join(dest_dir, "PDF")
-            elif name.lower().endswith(".csv") or name.lower().endswith(".xls") or name.lower().endswith(".xlsx"):
-                dest_dir = join(dest_dir, "CSV")
-            elif name.lower().endswith(".txt"):
-                dest_dir = join(dest_dir, "Text")
-            elif name.lower().endswith(".doc") or name.lower().endswith(".docx") or name.lower().endswith(".odt"):
-                dest_dir = join(dest_dir, "Word")
-            elif name.lower().endswith(".ppt") or name.lower().endswith(".pptx"):
-                dest_dir = join(dest_dir, "PPT")
-            move_file(entry, dest_dir, name)
-
-    def check_design_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in design_extensions):
-            dest_dir = join(source_dir, "Design")
-            move_file(entry, dest_dir, name)
-
-    def check_archive_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in archive_extensions):
-            dest_dir = join(source_dir, "Archives")
-            move_file(entry, dest_dir, name)
-
-    def check_script_files(self, entry, name):
-        if any(name.lower().endswith(ext) for ext in script_extensions):
-            dest_dir = join(source_dir, "Scripts")
-            move_file(entry, dest_dir, name)
-
+    def move_to_category(self, entry, category):
+        dest_dir = join(source_dir, category)
+        move_file(entry, dest_dir, entry.name)
 
 class MonitorThread(QThread):
     folder_selected = pyqtSignal()
@@ -98,9 +78,9 @@ class MonitorThread(QThread):
         self.exec()
 
     def stop(self):
-        self.observer.stop()
-        self.observer.join()
-
+        if self.observer:
+            self.observer.stop()
+            self.observer.join()
 
 class App(QWidget):
     def __init__(self):
@@ -135,32 +115,26 @@ class App(QWidget):
             global source_dir
             source_dir = folder
             self.folderLabel.setText(folder)
+            self.create_directories()
 
-            # Create destination directories within selected folder
-            dest_dirs = ["Music", "Video", "Image", "Documents", "Design", "Archives", "Scripts"]
-            for dest_dir in dest_dirs:
-                dest_path = join(source_dir, dest_dir)
-                if not exists(dest_path):
-                    makedirs(dest_path, exist_ok=True)
-                elif isfile(dest_path):
-                    remove(dest_path)
-                    makedirs(dest_path, exist_ok=True)
+    def create_directories(self):
+        main_dirs = ["Music", "Video", "Image", "Design", "Archives", "Scripts"]
+        doc_subdirs = ["PDF", "CSV", "Text", "PPT", "Word"]
+        
+        for dir_name in main_dirs:
+            self.ensure_directory(join(source_dir, dir_name))
+        
+        documents_dir = join(source_dir, "Documents")
+        self.ensure_directory(documents_dir)
+        
+        for subdir in doc_subdirs:
+            self.ensure_directory(join(documents_dir, subdir))
 
-            # Create subfolders within Documents folder
-            document_subfolders = ["PDF", "CSV", "Text", "PPT", "Word"]
-            documents_dir = join(source_dir, "Documents")
-            if not exists(documents_dir):
-                makedirs(documents_dir, exist_ok=True)
-            elif isfile(documents_dir):
-                remove(documents_dir)
-                makedirs(documents_dir, exist_ok=True)
-            for subfolder in document_subfolders:
-                subfolder_path = join(documents_dir, subfolder)
-                if not exists(subfolder_path):
-                    makedirs(subfolder_path, exist_ok=True)
-                elif isfile(subfolder_path):
-                    remove(subfolder_path)
-                    makedirs(subfolder_path, exist_ok=True)
+    def ensure_directory(self, path):
+        if exists(path):
+            if isfile(path):
+                remove(path)
+        makedirs(path, exist_ok=True)
 
     def monitorFolder(self):
         if source_dir:
@@ -168,15 +142,7 @@ class App(QWidget):
                 self.monitor_thread.start()
             with scandir(source_dir) as entries:
                 for entry in entries:
-                    name = entry.name
-                    MoverHandler().check_audio_files(entry, name)
-                    MoverHandler().check_video_files(entry, name)
-                    MoverHandler().check_image_files(entry, name)
-                    MoverHandler().check_document_files(entry, name)
-                    MoverHandler().check_design_files(entry, name)
-                    MoverHandler().check_archive_files(entry, name)
-                    MoverHandler().check_script_files(entry, name)
-
+                    MoverHandler().process_file(entry)
 
 def move_file(entry, dest_dir, name):
     dest_file_path = join(dest_dir, name)
@@ -189,11 +155,8 @@ def move_file(entry, dest_dir, name):
 
     try:
         move(entry, dest_file_path)
-    except FileNotFoundError:
-        print(f"File not found: {entry}")
     except Exception as e:
         print(f"Error moving file {entry} to {dest_file_path}: {e}")
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
